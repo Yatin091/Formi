@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barbeque Nation Chatbot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bbq: {
+              green: {
+                light: '#E8F5E9',
+                DEFAULT: '#2E7D32', 
+                dark: '#1B5E20'
+              }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #E8F5E9 0%, #81C784 100%);
+    }
+    .chat-bubble-user {
+      position: relative;
+    }
+    .chat-bubble-user::after {
+      content: '';
+      position: absolute;
+      right: -10px;
+      top: 50%;
+      border-width: 10px 0 10px 10px;
+      border-color: transparent transparent transparent #2E7D32;
+      transform: translateY(-50%);
+    }
+    .chat-bubble-bot {
+      position: relative;
+    }
+    .chat-bubble-bot::after {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 50%;
+      border-width: 10px 10px 10px 0;
+      border-color: transparent #ffffff transparent transparent;
+      transform: translateY(-50%);
+    }
+    #chatbox::-webkit-scrollbar {
+      width: 8px;
+    }
+    #chatbox::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    #chatbox::-webkit-scrollbar-thumb {
+      background: #2E7D32;
+      border-radius: 10px;
+    }
+    #chatbox::-webkit-scrollbar-thumb:hover {
+      background: #1B5E20;
+    }
+    .input-animation:focus {
+      box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.3);
+      transition: all 0.2s ease;
+    }
+    .btn-animation {
+      transition: all 0.3s ease;
+    }
+    .btn-animation:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white shadow-2xl rounded-2xl w-full max-w-md flex flex-col p-6 space-y-4">
+    <!-- Header with Logo -->
+    <div class="flex items-center justify-center space-x-2 mb-2">
+      <i class="fas fa-fire text-3xl text-bbq-green"></i>
+      <div class="text-2xl font-bold text-bbq-green">Barbeque Nation</div>
+    </div>
+    
+    <!-- Subtitle -->
+    <div class="text-center text-gray-600 text-sm mb-2">Your personal booking assistant</div>
+    
+    <!-- Chat Box -->
+    <div id="chatbox" class="flex-1 overflow-y-auto space-y-4 h-96 p-3 bg-bbq-green-light rounded-xl">
+      <!-- Messages will appear here -->
+    </div>
+
+    <!-- Input and Send -->
+    <div class="flex items-center space-x-2 mt-3">
+      <input id="userInput" type="text" placeholder="Type your message..."
+             class="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none input-animation" />
+      <button onclick="sendMessage()" class="bg-bbq-green text-white px-4 py-3 rounded-xl hover:bg-bbq-green-dark btn-animation">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="flex justify-center space-x-2 pt-2">
+      <button onclick="quickAction('FAQ')" class="px-3 py-1 bg-bbq-green-light text-bbq-green text-sm rounded-full hover:bg-bbq-green hover:text-white transition-all">
+        FAQ
+      </button>
+      <button onclick="quickAction('Book a table')" class="px-3 py-1 bg-bbq-green-light text-bbq-green text-sm rounded-full hover:bg-bbq-green hover:text-white transition-all">
+        Book Table
+      </button>
+      <button onclick="quickAction('Menu')" class="px-3 py-1 bg-bbq-green-light text-bbq-green text-sm rounded-full hover:bg-bbq-green hover:text-white transition-all">
+        Menu
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const chatbox = document.getElementById("chatbox");
+    const input = document.getElementById("userInput");
+    let chatHistory = [];
+    let currentState = "INIT";
+
+   
+    let bookingData = {
+      Modality: "Chatbot",
+      CallTime: "",
+      PhoneNumber: "",
+      BookingDate: "",
+      BookingTime: "",
+      CustomerName: "",
+      NumberOfGuests: "",
+      CallOutcome: "Booking"
+    };
+  
+    window.onload = () => {
+      sendToStateMachine("hello"); // Start conversation
+    };
+
+    function appendUserMessage(msg) {
+      const div = document.createElement("div");
+      div.className = "flex justify-end";
+      div.innerHTML = `
+        <div class="max-w-xs bg-bbq-green text-white px-4 py-2 rounded-xl chat-bubble-user shadow-md">
+          ${msg}
+        </div>`;
+      chatbox.appendChild(div);
+      chatbox.scrollTop = chatbox.scrollHeight;
+
+      if (hasStartedInteraction) {
+        chatHistory.push({ sender: "User", message: msg });
+      }
+    }
+
+    function appendBotMessage(msg) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <div class="max-w-xs bg-white text-gray-800 px-4 py-2 rounded-xl chat-bubble-bot shadow-md">
+          ${msg}
+        </div>`;
+      chatbox.appendChild(div);
+      chatbox.scrollTop = chatbox.scrollHeight;
+
+      chatHistory.push({ sender: "Bot", message: msg });
+      hasStartedInteraction = true;
+    }
+
+    async function sendMessage() {
+      const message = input.value.trim();
+      if (!message) return;
+
+      appendUserMessage(message);
+      input.value = "";
+      await sendToStateMachine(message);
+    }
+
+    async function sendToStateMachine(message) {
+      try {
+        const res = await fetch("http://localhost:3000/api/state-query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, currentState })
+        });
+
+        const data = await res.json();
+        const response = data.response || "Sorry, I didn't understand.";
+        const prevState = currentState;
+        currentState = data.nextState;
+
+        appendBotMessage(response);
+
+        switch (prevState) {
+          case "BOOKING_PHONE":
+            bookingData.PhoneNumber = message;
+            break;
+          case "BOOKING_DATE":
+            bookingData.BookingDate = message;
+            break;
+          case "BOOKING_TIME":
+            bookingData.BookingTime = message;
+            break;
+          case "BOOKING_GUESTS":
+            bookingData.NumberOfGuests = message;
+            break;
+          case "BOOKING_NAME":
+            bookingData.CustomerName = message;
+            break;
+        }
+        if ((message.toLowerCase().includes("book")) || message === "Book"||message==="Book a Table") {
+          bookingData.CallOutcome = "Book";
+        }
+        if (currentState === "END" && prevState === "BOOKING_NAME") {
+          bookingData.CallTime = new Date().toISOString();
+          await logConversation(bookingData);
+        }
+        if (currentState === "END" && prevState === "MENU") {
+          bookingData.CallTime = new Date().toISOString();
+          await logConversation(bookingData);
+        }
+
+        if (currentState === "FAQ" && prevState === "INIT") {
+          bookingData.CallOutcome = "FAQ";
+        }
+
+        if ((prevState === "INIT" && message.toLowerCase().includes("menu")) || message === "Menu") {
+          bookingData.CallOutcome = "Menu";
+        }
+
+      } catch (err) {
+        console.error("Error:", err);
+        appendBotMessage("⚠️ Something went wrong. Please try again.");
+      }
+    }
+
+    async function logConversation(data) {
+      const summary = chatHistory.map(msg => `${msg.sender}: ${msg.message}`).join("\n");
+      data.CallSummary = summary;
+      
+      try {
+        await fetch("http://localhost:3000/api/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        console.log("Conversation logged successfully");
+      } catch (error) {
+        console.error("Logging failed:", error);
+        appendBotMessage("⚠️ Failed to log the conversation.");
+      }
+    }
+
+    function quickAction(action) {
+      sendMessageFromButton(action);
+    }
+
+    function sendMessageFromButton(text) {
+      appendUserMessage(text);
+      sendToStateMachine(text);
+    }
+
+    input.addEventListener("keyup", function (event) {
+      if (event.key === "Enter") {
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
